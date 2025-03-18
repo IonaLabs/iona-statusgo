@@ -191,7 +191,8 @@ func (s *MessengerStoreNodeRequestSuite) createOwner() {
 	WaitForPeersConnected(&s.Suite, s.ownerWaku, func() peer.IDSlice {
 		err := s.owner.DialPeer(s.storeNodeAddress)
 		s.Require().NoError(err)
-		return peer.IDSlice{s.wakuStoreNode.PeerID()}
+		peerID := s.wakuStoreNode.PeerID()
+		return peer.IDSlice{peerID}
 	})
 }
 
