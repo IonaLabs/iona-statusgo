@@ -9,55 +9,77 @@ import (
 	"net/http"
 	netUrl "net/url"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/status-im/status-go/logutils"
 )
 
-const requestTimeout = 5 * time.Second
-const maxNumOfRequestRetries = 5
+const (
+	defaultRequestTimeout  = 5 * time.Second
+	defaultMaxRetries      = 5
+	defaultIdleConnTimeout = 90 * time.Second
+)
 
 type BasicCreds struct {
 	User     string
 	Password string
 }
 
+// HTTPClient represents an HTTP client with configurable options
 type HTTPClient struct {
 	client     *http.Client
 	maxRetries int
 }
 
-func NewHTTPClient() *HTTPClient {
-	return &HTTPClient{
-		client: &http.Client{
-			Timeout: requestTimeout,
-		},
-		maxRetries: maxNumOfRequestRetries,
+// Option defines a function type for configuring HTTPClient
+type Option func(*HTTPClient)
+
+// WithTimeout sets the overall request timeout
+func WithTimeout(timeout time.Duration) Option {
+	return func(c *HTTPClient) {
+		c.client.Timeout = timeout
 	}
 }
 
-// NewHTTPClientWithDetailedTimeouts creates a new HTTPClient with separate timeouts for
-// connection establishment and data transfer
-func NewHTTPClientWithDetailedTimeouts(
-	dialTimeout time.Duration,
-	tlsHandshakeTimeout time.Duration,
-	responseHeaderTimeout time.Duration,
-	requestTimeout time.Duration,
-	maxRetries int,
-) *HTTPClient {
-	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: dialTimeout, // Timeout for establishing a connection
-		}).DialContext,
-		TLSHandshakeTimeout:   tlsHandshakeTimeout,   // Timeout for TLS handshake
-		ResponseHeaderTimeout: responseHeaderTimeout, // Timeout for receiving response headers
-		IdleConnTimeout:       90 * time.Second,      // How long to keep idle connections
+// WithMaxRetries sets the maximum number of retries for failed requests
+func WithMaxRetries(maxRetries int) Option {
+	return func(c *HTTPClient) {
+		c.maxRetries = maxRetries
+	}
+}
+
+// WithDetailedTimeouts sets detailed timeouts for different connection phases
+func WithDetailedTimeouts(dialTimeout, tlsHandshakeTimeout, responseHeaderTimeout, requestTimeout time.Duration) Option {
+	return func(c *HTTPClient) {
+		transport := &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: dialTimeout,
+			}).DialContext,
+			TLSHandshakeTimeout:   tlsHandshakeTimeout,
+			ResponseHeaderTimeout: responseHeaderTimeout,
+			IdleConnTimeout:       defaultIdleConnTimeout,
+		}
+		c.client.Transport = transport
+		c.client.Timeout = requestTimeout
+	}
+}
+
+// NewHTTPClient creates a new HTTPClient with the provided options
+func NewHTTPClient(opts ...Option) *HTTPClient {
+	client := &HTTPClient{
+		client: &http.Client{
+			Timeout: defaultRequestTimeout,
+		},
+		maxRetries: defaultMaxRetries,
 	}
 
-	return &HTTPClient{
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   requestTimeout, // Overall request timeout
-		},
-		maxRetries: maxRetries,
+	// Apply all provided options
+	for _, opt := range opts {
+		opt(client)
 	}
+
+	return client
 }
 
 // doGetRequest performs a GET request with the given URL and parameters
@@ -65,6 +87,7 @@ func NewHTTPClientWithDetailedTimeouts(
 // If etag is not empty, it will add an If-None-Match header to the request
 // If the server responds with a 304 status code (`http.StatusNotModified`), it will return an empty body and the same etag
 func (c *HTTPClient) doGetRequest(ctx context.Context, url string, params netUrl.Values, creds *BasicCreds, etag string) (body []byte, newEtag string, err error) {
+	startTime := time.Now()
 	if len(params) > 0 {
 		url = url + "?" + params.Encode()
 	}
@@ -72,6 +95,9 @@ func (c *HTTPClient) doGetRequest(ctx context.Context, url string, params netUrl
 	var req *http.Request
 	req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		logutils.ZapLogger().Debug("Failed to create GET request",
+			zap.String("url", url),
+			zap.Error(err))
 		return
 	}
 
@@ -87,18 +113,28 @@ func (c *HTTPClient) doGetRequest(ctx context.Context, url string, params netUrl
 
 	var resp *http.Response
 	maxRetries := c.maxRetries
-	if maxRetries <= 0 {
-		maxRetries = maxNumOfRequestRetries // Use default if not set
+	if maxRetries < 0 {
+		maxRetries = defaultMaxRetries // Use default if not set
 	}
 
+	var retryCount int
 	for i := 0; i < maxRetries; i++ {
+		retryCount = i
 		resp, err = c.client.Do(req)
 		if err == nil || i == maxRetries-1 {
 			break
 		}
+		logutils.ZapLogger().Debug("Retrying GET request after error",
+			zap.String("url", url),
+			zap.Int("retry", i+1),
+			zap.Error(err))
 		time.Sleep(200 * time.Millisecond)
 	}
 	if err != nil {
+		logutils.ZapLogger().Debug("GET request failed after retries",
+			zap.String("url", url),
+			zap.Int("retries", retryCount),
+			zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()
@@ -111,8 +147,19 @@ func (c *HTTPClient) doGetRequest(ctx context.Context, url string, params netUrl
 
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
+		logutils.ZapLogger().Debug("Failed to read GET response body",
+			zap.String("url", url),
+			zap.Error(err))
 		return
 	}
+
+	duration := time.Since(startTime)
+	logutils.ZapLogger().Debug("GET request completed",
+		zap.String("url", url),
+		zap.Int("status", resp.StatusCode),
+		zap.Int("retries", retryCount),
+		zap.Int("bodySize", len(body)),
+		zap.Duration("duration", duration))
 
 	return
 }
@@ -136,7 +183,6 @@ func (c *HTTPClient) DoGetRequestWithCredentials(ctx context.Context, url string
 func (c *HTTPClient) DoGetRequestWithEtag(ctx context.Context, url string, params netUrl.Values, etag string) (body []byte, newEtag string, err error) {
 	return c.doGetRequest(ctx, url, params, nil, etag)
 }
-
 func (c *HTTPClient) DoPostRequest(ctx context.Context, url string, params map[string]interface{}, creds *BasicCreds) ([]byte, error) {
 	jsonData, err := json.Marshal(params)
 	if err != nil {
