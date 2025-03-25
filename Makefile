@@ -100,7 +100,7 @@ shell: ##@prepare Enter into a pre-configured shell
 ifndef IN_NIX_SHELL
 	@ENTER_NIX_SHELL
 else
-	@echo "${YELLOW}Nix shell is already active$(RESET)"
+	@echo -e "$(YELLOW)Nix shell is already active$(RESET)"
 endif
 
 nix-repl: SHELL := /bin/sh
