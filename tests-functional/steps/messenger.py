@@ -214,7 +214,7 @@ class MessengerSteps(NetworkConditionsSteps):
         for i in range(message_count):
             message_text = f"test_message_{i}_{uuid4()}"
             sent_texts.append(message_text)
-            response = self.sender.wakuext_service.send_message(self.receiver.public_key, message_text)
+            response = self.sender.wakuext_service.send_one_to_one_message(self.receiver.public_key, message_text)
             responses.append(response)
 
         return sent_texts, responses
