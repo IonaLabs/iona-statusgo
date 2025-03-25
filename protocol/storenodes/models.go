@@ -5,7 +5,7 @@ import (
 
 	"github.com/status-im/status-go/eth-node/types"
 	"github.com/status-im/status-go/protocol/protobuf"
-	"github.com/status-im/status-go/services/mailservers"
+	wakutypes "github.com/status-im/status-go/waku/types"
 )
 
 // Storenode is a struct that represents a storenode, it is very closely related to `mailservers.Mailserver`
@@ -63,8 +63,8 @@ func FromProtobuf(storenodes []*protobuf.Storenode, clock uint64) Storenodes {
 	return result
 }
 
-func toMailserver(m Storenode) mailservers.Mailserver {
-	return mailservers.Mailserver{
+func toMailserver(m Storenode) wakutypes.Mailserver {
+	return wakutypes.Mailserver{
 		ID:     m.StorenodeID,
 		Name:   m.Name,
 		Custom: true,
