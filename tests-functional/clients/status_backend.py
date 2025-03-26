@@ -168,6 +168,15 @@ class StatusBackend(RpcClient, SignalClient):
         return response
 
     def init_status_backend(self, data_dir=USER_DIR):
+        if option.logout:
+            logging.warning("automatically logging out before InitializeApplication")
+            try:
+                self.logout()
+                logging.debug("successfully logged out")
+            except Exception:
+                logging.debug("failed to log out")
+                pass
+
         method = "InitializeApplication"
         data = {
             "dataDir": data_dir,
@@ -304,7 +313,7 @@ class StatusBackend(RpcClient, SignalClient):
         data = self._set_proxy_credentials(data)
         return self.api_valid_request(method, data)
 
-    def logout(self, user=user_1):
+    def logout(self):
         method = "Logout"
         return self.api_valid_request(method, {})
 
