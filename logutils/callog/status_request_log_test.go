@@ -37,7 +37,7 @@ func TestRemoveSensitiveInfo(t *testing.T) {
 		{
 			name:     "password field with spaces",
 			input:    `{"username":"user1", "password" : "secret123"}`,
-			expected: fmt.Sprintf(`{"username":"user1", "password":"%s"}`, redactionPlaceholder),
+			expected: fmt.Sprintf(`{"username":"user1", "password" : "%s"}`, redactionPlaceholder),
 		},
 		{
 			name:     "multiple password fields",
@@ -53,6 +53,11 @@ func TestRemoveSensitiveInfo(t *testing.T) {
 			name:     "should not match password substring in field names",
 			input:    `{"eventValue":{"flowType":"UserProfileCreatePassword","viewId":"UserProfileCreatePassword"}}`,
 			expected: `{"eventValue":{"flowType":"UserProfileCreatePassword","viewId":"UserProfileCreatePassword"}}`,
+		},
+		{
+			name:     "JSON array with escaped JSON string containing mnemonic",
+			input:    `["{\"mnemonic\":\"a b c d\"}"]`,
+			expected: fmt.Sprintf(`["{\"mnemonic\":\"%s\"}"]`, redactionPlaceholder),
 		},
 	}
 
@@ -239,4 +244,50 @@ func TestSignal(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, resultDataMap)
 	require.Equal(t, redactionPlaceholder, resultDataMap["password"])
+}
+
+func TestLogRPCCall(t *testing.T) {
+	tempLogFile, err := os.CreateTemp(t.TempDir(), "TestCall*.log")
+	require.NoError(t, err)
+	requestLogger, err := requestlog.CreateRequestLogger(tempLogFile.Name())
+	require.NoError(t, err)
+	require.NotNil(t, requestLogger)
+
+	testCases := []struct {
+		name                string
+		method              string
+		params              string
+		fn                  func() string
+		expectedLogContains string
+		expectedResult      string
+	}{
+		{
+			name:                "sensitive method",
+			method:              "accounts_importMnemonic",
+			params:              `{"mnemonic":"mnemonic123 xyz"}`,
+			fn:                  func() string { return "test result1" },
+			expectedLogContains: redactionPlaceholder,
+			expectedResult:      "test result1",
+		},
+		{
+			name:                "non-sensitive method",
+			method:              "eth_blockNumber",
+			params:              `{"address":"0x1234567890123456789012345678901234567890"}`,
+			fn:                  func() string { return "test result2" },
+			expectedLogContains: "0x1234567890123456789012345678901234567890",
+			expectedResult:      "test result2",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := logRPCCall(requestLogger, tc.params, tc.method, tc.fn)
+			logData, err := os.ReadFile(tempLogFile.Name())
+			require.NoError(t, err)
+			requestLogOutput := string(logData)
+			require.Equal(t, tc.expectedResult, result)
+			require.Contains(t, requestLogOutput, tc.method)
+			require.Contains(t, requestLogOutput, tc.expectedLogContains)
+		})
+	}
 }

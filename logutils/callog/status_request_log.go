@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/status-im/status-go/internal/sentry"
+	"github.com/status-im/status-go/logutils"
+	"github.com/status-im/status-go/logutils/requestlog"
 )
 
 const redactionPlaceholder = "***"
@@ -43,9 +45,40 @@ var sensitiveKeys = []string{
 	"gifs/api-key",
 }
 
-var sensitiveRegexString = fmt.Sprintf(`(?i)("\w*?(%s)\w*?")\s*:\s*(".*?")`, strings.Join(sensitiveKeys, "|"))
+var sensitiveRegexString = fmt.Sprintf(`(?i)(\\?"(?:\w*?%s\w*?)\\?"\s*:\s*\\?").*?(\\?")`, strings.Join(sensitiveKeys, "|"))
 
 var sensitiveRegex = regexp.MustCompile(sensitiveRegexString)
+
+var sensitiveMethod = map[string]bool{
+	"accounts_importMnemonic":                            true,
+	"accounts_importPrivateKey":                          true,
+	"accounts_makeSeedPhraseKeypairFullyOperable":        true,
+	"accounts_getRandomMnemonic":                         true,
+	"accounts_migrateNonProfileKeycardKeypairToApp":      true,
+	"accounts_addKeypair":                                true,
+	"accounts_createKeystoreFileForAccount":              true,
+	"accounts_addAccount":                                true,
+	"accounts_makePrivateKeyKeypairFullyOperable":        true,
+	"accounts_makePartiallyOperableAccoutsFullyOperable": true,
+	"accounts_verifyKeystoreFileForAccount":              true,
+	"ens_register":                                       true,
+	"ens_release":                                        true,
+	"ens_setPubKey":                                      true,
+	"wakuext_signData":                                   true,
+	"wakuext_exportCommunity":                            true,
+	"wakuext_importCommunity":                            true,
+	"wakuext_getCommunityPublicKeyFromPrivateKey":        true,
+	"personal_sign":                                      true,
+	"wallet_signTypedDataV4":                             true,
+	"wallet_safeSignTypedDataForDApps":                   true,
+	"wallet_getDerivedAddresses":                         true,
+	"wallet_signMessage":                                 true,
+	"wallet_getVerifiedWalletAccount":                    true,
+	"wallet_getDerivedAddressesForMnemonic":              true,
+	"provider_getVerifiedWalletAccount":                  true,
+	"provider_web3SignatureResponse":                     true,
+	"provider_processWeb3ReadOnlyRequest":                true,
+}
 
 func getFunctionName(fn any) string {
 	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
@@ -75,7 +108,7 @@ func getShortFunctionName(fn any) string {
 func Call(logger, requestLogger *zap.Logger, fn any, params ...any) any {
 	defer Recover(logger)
 
-	startTime := requestStartTime(requestLogger != nil)
+	startTime := RequestStartTime(requestLogger != nil)
 	fnValue := reflect.ValueOf(fn)
 	fnType := fnValue.Type()
 	if fnType.Kind() != reflect.Func {
@@ -115,11 +148,11 @@ func removeSensitiveInfo(jsonStr string) string {
 	// see related test for the usage of this function
 	return sensitiveRegex.ReplaceAllStringFunc(jsonStr, func(match string) string {
 		parts := sensitiveRegex.FindStringSubmatch(match)
-		return fmt.Sprintf(`%s:"%s"`, parts[1], redactionPlaceholder)
+		return fmt.Sprintf(`%s%s%s`, parts[1], redactionPlaceholder, parts[2])
 	})
 }
 
-func requestStartTime(enabled bool) time.Time {
+func RequestStartTime(enabled bool) time.Time {
 	if !enabled {
 		return time.Time{}
 	}
@@ -141,9 +174,18 @@ func Recover(logger *zap.Logger) {
 	panic(err)
 }
 
+func isSensitiveMethod(method string) bool {
+	_, ok := sensitiveMethod[method]
+	return ok
+}
+
 func LogCall(logger *zap.Logger, method string, params any, resp any, startTime time.Time) {
 	if logger == nil {
 		return
+	}
+	if isSensitiveMethod(method) {
+		params = redactionPlaceholder
+		resp = redactionPlaceholder
 	}
 	duration := time.Since(startTime)
 	logger.Debug("call",
@@ -162,6 +204,18 @@ func LogSignal(logger *zap.Logger, eventType string, event interface{}) {
 		zap.String("type", eventType),
 		dataField("event", event),
 	)
+}
+
+func LogRPCCall(params, method string, fn func() string) string {
+	defer Recover(logutils.ZapLogger())
+	return logRPCCall(requestlog.GetRequestLogger(), params, method, fn)
+}
+
+func logRPCCall(requestLogger *zap.Logger, params, method string, fn func() string) string {
+	startTime := RequestStartTime(requestLogger != nil)
+	resp := fn()
+	LogCall(requestLogger, method, params, resp, startTime)
+	return resp
 }
 
 func dataField(name string, data any) zap.Field {
