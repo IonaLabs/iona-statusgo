@@ -100,6 +100,7 @@ type WakuV2Config struct {
 	EnableConfirmations bool
 
 	// A name->libp2p_addr map for Wakuv2 custom nodes
+	// Deprecated: simply unused
 	CustomNodes map[string]string
 
 	// PeerExchange determines whether WakuV2 Peer Exchange is enabled or not
@@ -170,16 +171,19 @@ type ClusterConfig struct {
 	Fleet string
 
 	// StaticNodes is a list of static nodes.
+	// Deprecated: Not used in Waku V2
 	StaticNodes []string
 
 	// BootNodes is a list of bootnodes.
-	// Deprecated: won't be used at all in wakuv2
+	// Deprecated: Not used in Waku V2
 	BootNodes []string
 
 	// TrustedMailServers is a list of verified and trusted Mail Server nodes.
+	// Deprecated: Not used in Waku V2
 	TrustedMailServers []string
 
 	// PushNotificationsServers is a list of default push notification servers.
+	// Deprecated: Use ShhextConfig.DefaultPushNotificationsServers instead
 	PushNotificationsServers []string
 
 	// WakuNodes is a list of waku2 multiaddresses
@@ -240,7 +244,7 @@ type NodeConfig struct {
 	NodeKey string
 
 	// NoDiscovery set to true will disable discovery protocol.
-	// Deprecated: won't be used at all in wakuv2
+	// Deprecated: won't be used at all in wakuv2 and is always `true`.
 	NoDiscovery bool
 
 	// ListenAddr is an IP address and port of this node (e.g. 127.0.0.1:30303).
@@ -684,37 +688,33 @@ func NewNodeConfigWithDefaults(dataDir string, networkID uint64, opts ...Option)
 }
 
 func (c *NodeConfig) setDefaultPushNotificationsServers() error {
-	if c.ClusterConfig.Fleet == FleetUndefined {
+	if len(c.ShhextConfig.DefaultPushNotificationsServers) > 0 {
 		return nil
 	}
 
-	// If empty load defaults from the fleet
-	if len(c.ClusterConfig.PushNotificationsServers) == 0 {
-		logutils.ZapLogger().Debug("empty push notification servers, setting", zap.String("fleet", c.ClusterConfig.Fleet))
-		defaultConfig := &NodeConfig{}
-		err := loadConfigFromAsset(fmt.Sprintf("../config/cli/fleet-%s.json", c.ClusterConfig.Fleet), defaultConfig)
+	servers := DefaultPushNotificationServers()
+
+	// If empty set the default servers
+	logutils.ZapLogger().Debug("setting default push notification servers",
+		zap.Strings("servers", servers))
+
+	for _, pk := range servers {
+		keyBytes, err := hex.DecodeString("04" + pk)
 		if err != nil {
 			return err
 		}
-		c.ClusterConfig.PushNotificationsServers = defaultConfig.ClusterConfig.PushNotificationsServers
-	}
 
-	// If empty set the default servers
-	if len(c.ShhextConfig.DefaultPushNotificationsServers) == 0 {
-		logutils.ZapLogger().Debug("setting default push notification servers", zap.Strings("cluster servers", c.ClusterConfig.PushNotificationsServers))
-		for _, pk := range c.ClusterConfig.PushNotificationsServers {
-			keyBytes, err := hex.DecodeString("04" + pk)
-			if err != nil {
-				return err
-			}
-
-			key, err := crypto.UnmarshalPubkey(keyBytes)
-			if err != nil {
-				return err
-			}
-			c.ShhextConfig.DefaultPushNotificationsServers = append(c.ShhextConfig.DefaultPushNotificationsServers, &PushNotificationServer{PublicKey: key})
+		key, err := crypto.UnmarshalPubkey(keyBytes)
+		if err != nil {
+			return err
 		}
+
+		c.ShhextConfig.DefaultPushNotificationsServers = append(
+			c.ShhextConfig.DefaultPushNotificationsServers,
+			&PushNotificationServer{PublicKey: key},
+		)
 	}
+
 	return nil
 }
 
@@ -851,6 +851,7 @@ func NewConfigFromJSON(configJSON string) (*NodeConfig, error) {
 	return config, nil
 }
 
+// Deprecated: `fleet-*.json` files are deprecated. Use params.GetSupportedFleets instead.
 func LoadClusterConfigFromFleet(fleet string) (*ClusterConfig, error) {
 	nodeConfig := &NodeConfig{}
 	err := loadConfigFromAsset(fmt.Sprintf("../config/cli/fleet-%s.json", fleet), nodeConfig)
