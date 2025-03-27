@@ -20,7 +20,7 @@ from clients.services.settings import SettingsService
 from clients.signals import SignalClient
 from clients.rpc import RpcClient
 from conftest import option
-from resources.constants import USE_IPV6, user_1, DEFAULT_DISPLAY_NAME, USER_DIR, ANVIL_NETWORK_ID
+from resources.constants import USE_IPV6, user_1, USER_DIR, ANVIL_NETWORK_ID
 from docker.errors import APIError
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
@@ -186,6 +186,38 @@ class StatusBackend(RpcClient, SignalClient):
         }
         return self.api_valid_request(method, data)
 
+    def _set_networks(self, data, **kwargs):
+        network_id = kwargs.get("network_id", ANVIL_NETWORK_ID)
+        anvil_network = {
+            "chainID": network_id,
+            "chainName": "Anvil",
+            "rpcProviders": [
+                {
+                    "chainId": network_id,
+                    "name": "Anvil Direct",
+                    "url": "http://anvil:8545",
+                    "enableRpsLimiter": False,
+                    "type": "embedded-direct",
+                    "enabled": True,
+                    "authType": "no-auth",
+                }
+            ],
+            "shortName": "eth",
+            "nativeCurrencyName": "Ether",
+            "nativeCurrencySymbol": "ETH",
+            "nativeCurrencyDecimals": 18,
+            "isTest": False,
+            "layer": 1,
+            "enabled": True,
+            "isActive": True,
+            "isDeactivatable": False,
+        }
+        anvil_network = self._set_token_overrides(anvil_network, kwargs.get("token_overrides", []))
+
+        data["testNetworksEnabled"] = False
+        data["networkId"] = network_id
+        data["networksOverride"] = [anvil_network]
+
     def _set_proxy_credentials(self, data):
         if "STATUS_BUILD_PROXY_USER" not in os.environ:
             return data
@@ -230,77 +262,40 @@ class StatusBackend(RpcClient, SignalClient):
 
         return temp_dir
 
-    def create_account_and_login(self, data_dir=USER_DIR, **kwargs):
+    def _set_display_name(self, **kwargs):
         self.display_name = kwargs.get(
             "display_name",
             f"DISP_NAME_{''.join(random.choices(string.ascii_letters + string.digits + '_-', k=10))}",
         )
-        method = "CreateAccountAndLogin"
+
+    def _create_account_request(self, data_dir, user, **kwargs):
         data = {
             "rootDataDir": data_dir,
             "kdfIterations": 256000,
+            # Profile config
             "displayName": self.display_name,
-            "password": kwargs.get("password", user_1.password),
-            "customizationColor": "primary",
+            "password": kwargs.get("password", user.password),
+            "customizationColor": kwargs.get("customizationColor", "primary"),
+            # Logs config
             "logEnabled": True,
             "logLevel": "DEBUG",
             "wakuV2LightClient": kwargs.get("wakuV2LightClient", False),
         }
-
+        self._set_networks(data, **kwargs)
         data = self._set_proxy_credentials(data)
-        resp = self.api_valid_request(method, data)
-        self.node_login_event = self.wait_for_login()
-        return resp
+        return data
 
-    def restore_account_and_login(
-        self,
-        data_dir=USER_DIR,
-        display_name=DEFAULT_DISPLAY_NAME,
-        user=user_1,
-        network_id=ANVIL_NETWORK_ID,
-        **kwargs,
-    ):
+    def create_account_and_login(self, data_dir=USER_DIR, user=user_1, **kwargs):
+        self._set_display_name(**kwargs)
+        method = "CreateAccountAndLogin"
+        data = self._create_account_request(data_dir, user, **kwargs)
+        return self.api_valid_request(method, data)
+
+    def restore_account_and_login(self, data_dir=USER_DIR, user=user_1, **kwargs):
+        self._set_display_name(**kwargs)
         method = "RestoreAccountAndLogin"
-        anvil_network = {
-            "chainID": network_id,
-            "chainName": "Anvil",
-            "rpcProviders": [
-                {
-                    "chainId": network_id,
-                    "name": "Anvil Direct",
-                    "url": "http://anvil:8545",
-                    "enableRpsLimiter": False,
-                    "type": "embedded-direct",
-                    "enabled": True,
-                    "authType": "no-auth",
-                }
-            ],
-            "shortName": "eth",
-            "nativeCurrencyName": "Ether",
-            "nativeCurrencySymbol": "ETH",
-            "nativeCurrencyDecimals": 18,
-            "isTest": False,
-            "layer": 1,
-            "enabled": True,
-            "isActive": True,
-            "isDeactivatable": False,
-        }
-        anvil_network = self._set_token_overrides(anvil_network, kwargs.get("token_overrides", []))
-
-        data = {
-            "rootDataDir": data_dir,
-            "kdfIterations": 256000,
-            "displayName": display_name,
-            "password": user.password,
-            "mnemonic": user.passphrase,
-            "customizationColor": "blue",
-            "logEnabled": True,
-            "logLevel": "DEBUG",
-            "testNetworksEnabled": False,
-            "networkId": network_id,
-            "networksOverride": [anvil_network],
-        }
-        data = self._set_proxy_credentials(data)
+        data = self._create_account_request(data_dir, user, **kwargs)
+        data["mnemonic"] = user.passphrase
         return self.api_valid_request(method, data)
 
     def login(self, keyUid, user=user_1):
@@ -316,18 +311,6 @@ class StatusBackend(RpcClient, SignalClient):
     def logout(self):
         method = "Logout"
         return self.api_valid_request(method, {})
-
-    def restore_account_and_wait_for_rpc_client_to_start(self, timeout=60):
-        self.restore_account_and_login()
-        start_time = time.time()
-        # ToDo: change this part for waiting for `node.login` signal when websockets are migrated to StatusBackend
-        while time.time() - start_time <= timeout:
-            try:
-                self.accounts_service.get_account_keypairs()
-                return
-            except AssertionError:
-                time.sleep(3)
-        raise TimeoutError(f"RPC client was not started after {timeout} seconds")
 
     def container_pause(self):
         if not self.container:
