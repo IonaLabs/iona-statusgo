@@ -10,6 +10,7 @@ import os
 
 from conftest import option
 from resources.constants import user_1, ANVIL_NETWORK_ID
+from tenacity import retry, wait_fixed, stop_after_attempt
 
 
 class SmartContractRunner:
@@ -20,18 +21,25 @@ class SmartContractRunner:
         self.docker_client = docker.from_env()
         self.docker_project_name = option.docker_project_name
         self.network_name = f"{self.docker_project_name}_default"
-        network = self.docker_client.networks.get(self.network_name)
-        self.container_name = None
-        for container in network.containers:
-            container_name_prefix = f"{self.docker_project_name}-foundry"
-            container_name = container.name
-            if container_name is not None and container_name_prefix in container_name:
-                self.container_name = container_name
-                break
+
+        container_name_prefix = f"{self.docker_project_name}-foundry"
+        self.container_name = self.find_container_name(self.network_name, container_name_prefix)
+
         if not self.container_name:
             raise Exception("Foundry container not found")
         self.container = self.docker_client.containers.get(self.container_name)
         self.wait_for_healthy()
+
+    @retry(stop=stop_after_attempt(10), wait=wait_fixed(0.1), reraise=True)
+    def find_container_name(self, network_name, searched_container):
+        network = self.docker_client.networks.get(network_name)
+
+        for container in network.containers:
+            container_name = container.name
+            if container_name is not None and searched_container in container_name:
+                return container_name
+
+        return None
 
     def wait_for_healthy(self, timeout=10):
         start_time = time.time()
