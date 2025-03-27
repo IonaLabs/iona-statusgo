@@ -206,3 +206,38 @@ class WakuextService(Service):
         params = [message_id, new_status]
         response = self.rpc_request("updateMessageOutgoingStatus", params)
         return response.json()
+
+    def request_transaction(self, chat_id: str, value: str, contract: str, address: str):
+        params = [chat_id, value, contract, address]
+        response = self.rpc_request("requestTransaction", params)
+        return response.json()
+
+    def decline_request_transaction(self, message_id: str):
+        params = [message_id]
+        response = self.rpc_request("declineRequestTransaction", params)
+        return response.json()
+
+    def accept_request_transaction(self, transactionHash: str, message_id: str, signature: str):
+        params = [transactionHash, message_id, signature]
+        response = self.rpc_request("acceptRequestTransaction", params)
+        return response.json()
+
+    def request_address_for_transaction(self, chat_id: str, address_from: str, value: str, contract: str):
+        params = [chat_id, address_from, value, contract]
+        response = self.rpc_request("requestAddressForTransaction", params)
+        return response.json()
+
+    def decline_request_address_for_transaction(self, message_id: str):
+        params = [message_id]
+        response = self.rpc_request("declineRequestAddressForTransaction", params)
+        return response.json()
+
+    def accept_request_address_for_transaction(self, message_id: str, address: str):
+        params = [message_id, address]
+        response = self.rpc_request("acceptRequestAddressForTransaction", params)
+        return response.json()
+
+    def send_transaction(self, chat_id: str, value: str, contract: str, transactionHash: str, signature: str):
+        params = [chat_id, value, contract, transactionHash, signature]
+        response = self.rpc_request("sendTransaction", params)
+        return response.json()
