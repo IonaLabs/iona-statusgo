@@ -26,6 +26,7 @@ import (
 	v1protocol "github.com/status-im/status-go/protocol/v1"
 
 	wakutypes "github.com/status-im/status-go/waku/types"
+	wakuv2 "github.com/status-im/status-go/wakuv2"
 )
 
 // Whisper message properties.
@@ -85,6 +86,8 @@ type MessageSender struct {
 
 	// handleSharedSecrets is a callback that is called every time a new shared secret is negotiated
 	handleSharedSecrets func([]*sharedsecret.Secret) error
+
+	metricsHandler wakuv2.IMetricsHandler
 }
 
 func NewMessageSender(
@@ -123,6 +126,10 @@ func (s *MessageSender) Stop() {
 
 func (s *MessageSender) SetHandleSharedSecrets(handler func([]*sharedsecret.Secret) error) {
 	s.handleSharedSecrets = handler
+}
+
+func (s *MessageSender) SetMetricsHandler(handler wakuv2.IMetricsHandler) {
+	s.metricsHandler = handler
 }
 
 func (s *MessageSender) StartDatasync(statusChangeEvent chan datasyncnode.PeerStatusChangeEvent, handler func(peer state.PeerID, payload *datasyncproto.Payload) error) error {
@@ -430,6 +437,7 @@ func (s *MessageSender) sendCommunity(
 		zap.Any("contentType", rawMessage.MessageType),
 		zap.Strings("hashes", types.EncodeHexes(hashes)))
 	s.transport.Track(messageID, hashes, newMessages)
+	s.sendBandwidthMetrics(rawMessage)
 
 	return messageID, nil
 }
@@ -547,6 +555,8 @@ func (s *MessageSender) sendPrivate(
 		s.transport.Track(messageID, hashes, newMessages)
 	}
 
+	s.sendBandwidthMetrics(rawMessage)
+
 	return messageID, nil
 }
 
@@ -576,6 +586,7 @@ func (s *MessageSender) SendPairInstallation(
 	}
 
 	s.transport.Track(messageID, hashes, newMessages)
+	s.sendBandwidthMetrics(&rawMessage)
 
 	return messageID, nil
 }
@@ -800,6 +811,7 @@ func (s *MessageSender) SendPublic(
 		zap.String("messageType", "public"),
 		zap.Strings("hashes", types.EncodeHexes(hashes)))
 	s.transport.Track(messageID, hashes, newMessages)
+	s.sendBandwidthMetrics(&rawMessage)
 
 	return messageID, nil
 }
@@ -1310,6 +1322,12 @@ func (s *MessageSender) GetEphemeralKey() (*ecdsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func (s *MessageSender) sendBandwidthMetrics(rawMessage *RawMessage) {
+	if s.metricsHandler != nil {
+		s.metricsHandler.PushRawMessageByType(rawMessage.PubsubTopic, rawMessage.ContentTopic, rawMessage.MessageType.String(), uint32(len(rawMessage.Payload)))
+	}
 }
 
 func MessageSpecToWhisper(spec *encryption.ProtocolMessageSpec) (*wakutypes.NewMessage, error) {
