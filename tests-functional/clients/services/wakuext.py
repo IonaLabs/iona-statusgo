@@ -264,3 +264,33 @@ class WakuextService(Service):
         params = [chat_id, value, contract, transactionHash, signature]
         response = self.rpc_request("sendTransaction", params)
         return response.json()
+
+    def chats(self):
+        params = []
+        response = self.rpc_request("chats", params)
+        return response.json()
+
+    def chat(self, chat_id: str):
+        params = [chat_id]
+        response = self.rpc_request("chat", params)
+        return response.json()
+
+    def active_chats(self):
+        params = []
+        response = self.rpc_request("activeChats", params)
+        return response.json()
+
+    def mute_chat(self, chat_id: str):
+        params = [chat_id]
+        response = self.rpc_request("muteChat", params)
+        return response.json()
+
+    def mute_chat_v2(self, chat_id: str, muted_type: int):
+        params = [{"ChatId": chat_id, "MutedType": muted_type}]
+        response = self.rpc_request("muteChatV2", params)
+        return response.json()
+
+    def unmute_chat(self, chat_id: str):
+        params = [chat_id]
+        response = self.rpc_request("unmuteChat", params)
+        return response.json()
