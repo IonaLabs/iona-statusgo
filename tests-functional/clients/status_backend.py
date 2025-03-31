@@ -20,26 +20,28 @@ from clients.services.settings import SettingsService
 from clients.signals import SignalClient
 from clients.rpc import RpcClient
 from conftest import option
-from resources.constants import USE_IPV6, user_1, USER_DIR, ANVIL_NETWORK_ID
+from resources.constants import USE_IPV6, user_1, ANVIL_NETWORK_ID
 from docker.errors import APIError
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
 
 
 class StatusBackend(RpcClient, SignalClient):
-
     container = None
 
-    def __init__(self, await_signals=[], privileged=False, ipv6=USE_IPV6, status_backend_url=""):
+    def __init__(self, await_signals=[], privileged=False, ipv6=USE_IPV6):
         self.ipv6 = True if ipv6 == "Yes" else False
         logging.debug(f"Flag USE_IPV6 is: {self.ipv6}")
         self.docker_project_name = option.docker_project_name
         self.network_name = f"{self.docker_project_name}_default"
+
         if option.status_backend_url:
-            url = option.status_backend_url
-        elif status_backend_url != "":
-            url = status_backend_url
+            url = next(option.status_backend_urls)
+            assert url != "", "not enough status-backend urls provided"
+            self.temp_dir = tempfile.TemporaryDirectory()
+            self.data_dir = self.temp_dir.name
         else:
+            self.data_dir = "/usr/status-user"
             self.docker_client = docker.from_env()
             retries = 5
             ports_tried = []
@@ -56,6 +58,7 @@ class StatusBackend(RpcClient, SignalClient):
             else:
                 raise RuntimeError(f"Failed to start container on ports: {ports_tried}")
 
+        assert self.data_dir != ""
         self.base_url = url
         self.api_url = f"{url}/statusgo"
         self.ws_url = f"{url}".replace("http", "ws")
@@ -75,6 +78,10 @@ class StatusBackend(RpcClient, SignalClient):
         self.wakuext_service = WakuextService(self)
         self.accounts_service = AccountService(self)
         self.settings_service = SettingsService(self)
+
+    def __del__(self):
+        if self.temp_dir is not None:
+            self.temp_dir.cleanup()
 
     def _start_container(self, host_port, privileged):
         identifier = os.environ.get("BUILD_ID") if os.environ.get("CI") else os.popen("git rev-parse --short HEAD").read().strip()
@@ -167,7 +174,7 @@ class StatusBackend(RpcClient, SignalClient):
         self.verify_is_valid_api_response(response)
         return response
 
-    def init_status_backend(self, data_dir=USER_DIR):
+    def init_status_backend(self):
         if option.logout:
             logging.warning("automatically logging out before InitializeApplication")
             try:
@@ -179,7 +186,7 @@ class StatusBackend(RpcClient, SignalClient):
 
         method = "InitializeApplication"
         data = {
-            "dataDir": data_dir,
+            "dataDir": self.data_dir,
             "logEnabled": True,
             "logLevel": "DEBUG",
             "apiLogging": True,
@@ -268,9 +275,9 @@ class StatusBackend(RpcClient, SignalClient):
             f"DISP_NAME_{''.join(random.choices(string.ascii_letters + string.digits + '_-', k=10))}",
         )
 
-    def _create_account_request(self, data_dir, user, **kwargs):
+    def _create_account_request(self, user, **kwargs):
         data = {
-            "rootDataDir": data_dir,
+            "rootDataDir": self.data_dir,
             "kdfIterations": 256000,
             # Profile config
             "displayName": self.display_name,
@@ -285,16 +292,16 @@ class StatusBackend(RpcClient, SignalClient):
         data = self._set_proxy_credentials(data)
         return data
 
-    def create_account_and_login(self, data_dir=USER_DIR, user=user_1, **kwargs):
+    def create_account_and_login(self, user=user_1, **kwargs):
         self._set_display_name(**kwargs)
         method = "CreateAccountAndLogin"
-        data = self._create_account_request(data_dir, user, **kwargs)
+        data = self._create_account_request(user, **kwargs)
         return self.api_valid_request(method, data)
 
-    def restore_account_and_login(self, data_dir=USER_DIR, user=user_1, **kwargs):
+    def restore_account_and_login(self, user=user_1, **kwargs):
         self._set_display_name(**kwargs)
         method = "RestoreAccountAndLogin"
-        data = self._create_account_request(data_dir, user, **kwargs)
+        data = self._create_account_request(user, **kwargs)
         data["mnemonic"] = user.passphrase
         return self.api_valid_request(method, data)
 

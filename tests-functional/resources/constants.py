@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from conftest import option
 import os
 
 
@@ -30,7 +29,6 @@ FORGE_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "forge_output")
 DEPLOYER_ACCOUNT = user_1
 LOG_SIGNALS_TO_FILE = False  # used for debugging purposes
 USE_IPV6 = os.getenv("USE_IPV6", "No")
-USER_DIR = option.user_dir if option.user_dir else "/usr/status-user"
 
 gas_fee_mode_low = 0
 gas_fee_mode_medium = 1
