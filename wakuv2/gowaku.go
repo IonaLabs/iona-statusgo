@@ -21,6 +21,10 @@
 
 package wakuv2
 
+// Generate a mock for peerAddressHandler. Keep it in same dir and package, as it's a private type.
+// Yet we name the file _test.go to keep it only available in testing environment.
+//go:generate mockgen -source=gowaku.go -destination=gowaku_mock_test.go -package=wakuv2
+
 import (
 	"context"
 	"crypto/ecdsa"
@@ -35,6 +39,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	pkgerrors "github.com/pkg/errors"
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -70,6 +76,7 @@ import (
 	"github.com/waku-org/go-waku/waku/v2/peermanager"
 	wps "github.com/waku-org/go-waku/waku/v2/peerstore"
 	"github.com/waku-org/go-waku/waku/v2/protocol"
+	"github.com/waku-org/go-waku/waku/v2/protocol/enr"
 	"github.com/waku-org/go-waku/waku/v2/protocol/filter"
 	"github.com/waku-org/go-waku/waku/v2/protocol/lightpush"
 	"github.com/waku-org/go-waku/waku/v2/protocol/peer_exchange"
@@ -87,7 +94,7 @@ import (
 
 	"github.com/status-im/status-go/waku/types"
 
-	node "github.com/waku-org/go-waku/waku/v2/node"
+	"github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/waku-org/go-waku/waku/v2/protocol/pb"
 )
 
@@ -530,7 +537,21 @@ func (w *Waku) retryDnsDiscoveryWithBackoff(ctx context.Context, addr string, su
 	}
 }
 
+type peerAddressHandler interface {
+	discoverAndConnect(addr string)
+	connect(peerInfo peer.AddrInfo, node *enode.Node, origin wps.Origin)
+}
+
 func (w *Waku) discoverAndConnectPeers() {
+	for _, addrString := range w.cfg.WakuNodes {
+		err := handlePeerAddress(addrString, w)
+		if err != nil {
+			w.logger.Warn("failed to handle peer address", zap.String("addr", addrString), zap.Error(err))
+		}
+	}
+}
+
+func (w *Waku) discoverAndConnect(address string) {
 	fnApply := func(d dnsdisc.DiscoveredNode, wg *sync.WaitGroup) {
 		defer wg.Done()
 		if len(d.PeerInfo.Addrs) != 0 {
@@ -538,39 +559,53 @@ func (w *Waku) discoverAndConnectPeers() {
 		}
 	}
 
-	for _, addrString := range w.cfg.WakuNodes {
-		addrString := addrString
-		if strings.HasPrefix(addrString, "enrtree://") {
-			// Use DNS Discovery
-			go func() {
-				defer gocommon.LogOnPanic()
-				if err := w.dnsDiscover(w.ctx, addrString, fnApply, false); err != nil {
-					w.logger.Error("could not obtain dns discovery peers for ClusterConfig.WakuNodes", zap.Error(err), zap.String("dnsDiscURL", addrString))
-				}
-			}()
-		} else {
-			// It is a normal multiaddress
-			addr, err := multiaddr.NewMultiaddr(addrString)
-			if err != nil {
-				w.logger.Warn("invalid peer multiaddress", zap.String("ma", addrString), zap.Error(err))
-				continue
-			}
-
-			peerInfo, err := peer.AddrInfoFromP2pAddr(addr)
-			if err != nil {
-				w.logger.Warn("invalid peer multiaddress", zap.Stringer("addr", addr), zap.Error(err))
-				continue
-			}
-
-			go w.connect(*peerInfo, nil, wps.Static)
+	go func() {
+		defer gocommon.LogOnPanic()
+		if err := w.dnsDiscover(w.ctx, address, fnApply, false); err != nil {
+			w.logger.Error("dns discovery failed",
+				zap.String("dnsDiscURL", address),
+				zap.Error(err))
 		}
+	}()
+}
+
+func handlePeerAddress(addr string, handler peerAddressHandler) error {
+	if strings.HasPrefix(addr, "enrtree://") {
+		handler.discoverAndConnect(addr)
+		return nil
 	}
+
+	if node, err := enode.Parse(enode.ValidSchemes, addr); err == nil {
+		id, addrs, err := enr.Multiaddress(node)
+		if err != nil {
+			return pkgerrors.Wrap(err, "invalid enr contents")
+		}
+
+		peerInfo := peer.AddrInfo{
+			ID:    id,
+			Addrs: addrs,
+		}
+		handler.connect(peerInfo, node, wps.Static)
+		return nil
+	}
+
+	if maddr, err := multiaddr.NewMultiaddr(addr); err == nil {
+		peerInfo, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return pkgerrors.Wrap(err, "invalid peer multiaddress")
+		}
+
+		handler.connect(*peerInfo, nil, wps.Static)
+		return nil
+	}
+
+	return errors.New("unknown format of waku node address")
 }
 
 func (w *Waku) connect(peerInfo peer.AddrInfo, enr *enode.Node, origin wps.Origin) {
 	defer gocommon.LogOnPanic()
 	// Connection will be prunned eventually by the connection manager if needed
-	// The peer connector in go-waku uses Connect, so it will execute identify as part of its
+	// The peer connector in go-waku uses connect, so it will execute identify as part of its
 	w.node.AddDiscoveredPeer(peerInfo.ID, peerInfo.Addrs, origin, w.cfg.DefaultShardedPubsubTopics, enr, true)
 }
 

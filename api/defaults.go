@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"path/filepath"
 
@@ -147,6 +148,10 @@ func SetFleet(fleet string, nodeConfig *params.NodeConfig) error {
 		EnableStoreConfirmationForMessagesSent: specifiedWakuV2Config.EnableStoreConfirmationForMessagesSent,
 		EnableMissingMessageVerification:       specifiedWakuV2Config.EnableMissingMessageVerification,
 		Nameserver:                             specifiedWakuV2Config.Nameserver,
+	}
+
+	if !params.IsFleetSupported(fleet) {
+		return fmt.Errorf("unknown fleet %s", fleet)
 	}
 
 	nodeConfig.ClusterConfig = params.DefaultClusterConfig(fleet)
