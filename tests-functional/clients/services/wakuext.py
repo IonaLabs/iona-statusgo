@@ -275,6 +275,11 @@ class WakuextService(Service):
         response = self.rpc_request("chat", params)
         return response.json()
 
+    def chats_preview(self, filter_type: int):
+        params = [filter_type]
+        response = self.rpc_request("chatsPreview", params)
+        return response.json()
+
     def active_chats(self):
         params = []
         response = self.rpc_request("activeChats", params)
@@ -293,4 +298,24 @@ class WakuextService(Service):
     def unmute_chat(self, chat_id: str):
         params = [chat_id]
         response = self.rpc_request("unmuteChat", params)
+        return response.json()
+
+    def clear_history(self, chat_id: str):
+        params = [{"id": chat_id}]
+        response = self.rpc_request("clearHistory", params)
+        return response.json()
+
+    def deactivate_chat(self, chat_id: str, preserve_history: bool):
+        params = [{"id": chat_id, "preserveHistory": preserve_history}]
+        response = self.rpc_request("deactivateChat", params)
+        return response.json()
+
+    def save_chat(self, chat_id: str, active=True):
+        params = [{"id": chat_id, "active": active}]
+        response = self.rpc_request("saveChat", params)
+        return response.json()
+
+    def create_one_to_one_chat(self, chat_id: str, ens_name: str):
+        params = [{"id": chat_id, "ensName": ens_name}]
+        response = self.rpc_request("createOneToOneChat", params)
         return response.json()
