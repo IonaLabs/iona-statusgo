@@ -324,6 +324,11 @@ var (
 		dBColumnName:   "remote_push_notifications_enabled",
 		valueHandler:   BoolHandler,
 	}
+	NewsNotificationsEnabled = SettingField{
+		reactFieldName: "news-notifications-enabled?",
+		dBColumnName:   "news_notifications_enabled",
+		valueHandler:   BoolHandler,
+	}
 	SendPushNotifications = SettingField{
 		reactFieldName: "send-push-notifications?",
 		dBColumnName:   "send_push_notifications",
@@ -559,6 +564,7 @@ var (
 		Name,
 		NetworksCurrentNetwork,
 		NetworksNetworks,
+		NewsNotificationsEnabled,
 		NodeConfig,
 		NotificationsEnabled,
 		OpenseaEnabled,
