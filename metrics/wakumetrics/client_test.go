@@ -55,15 +55,6 @@ func getCounterValue(metric *prometheus.CounterVec, labels ...string) float64 {
 	return pb.Counter.GetValue()
 }
 
-func getGaugeValue(metric prometheus.Gauge) float64 {
-	pb := &dto.Metric{}
-	err := metric.(prometheus.Metric).Write(pb)
-	if err != nil {
-		return 0
-	}
-	return pb.Gauge.GetValue()
-}
-
 func getGaugeVecValue(metric *prometheus.GaugeVec, labels ...string) float64 {
 	m := metric.WithLabelValues(labels...)
 	pb := &dto.Metric{}
@@ -105,14 +96,6 @@ func TestClient_PushReceivedMessages(t *testing.T) {
 		filter.ChatID,
 	)
 	require.Equal(t, float64(1), value)
-}
-
-func TestClient_PushPeerCount(t *testing.T) {
-	client := createTestClient(t)
-
-	client.PushPeerCount(5)
-	value := getGaugeValue(metrics.ConnectedPeers)
-	require.Equal(t, float64(5), value)
 }
 
 func TestClient_PushPeerCountByOrigin(t *testing.T) {
