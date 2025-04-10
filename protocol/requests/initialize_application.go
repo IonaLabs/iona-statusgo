@@ -2,6 +2,8 @@ package requests
 
 import (
 	"errors"
+
+	"github.com/status-im/status-go/logutils"
 )
 
 var (
@@ -20,7 +22,9 @@ type InitializeApplication struct {
 	// If empty, logs are stored in the `DataDir`.
 	LogDir string `json:"logDir"`
 
-	LogEnabled        bool   `json:"logEnabled"`
+	// Specify if enable Pre-Login Log
+	LogEnabled bool `json:"logEnabled"`
+	// Specify the Pre-Login log level
 	LogLevel          string `json:"logLevel"`
 	APILoggingEnabled bool   `json:"apiLoggingEnabled"`
 
@@ -36,6 +40,11 @@ type InitializeApplication struct {
 func (i *InitializeApplication) Validate() error {
 	if len(i.DataDir) == 0 {
 		return ErrInitializeApplicationInvalidDataDir
+	}
+	if i.LogLevel != "" {
+		if _, err := logutils.LvlFromString(i.LogLevel); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -141,3 +141,7 @@ func TruncateWithDotN(s string, n int) string {
 func TruncateWithDot(s string) string {
 	return TruncateWithDotN(s, DefaultTruncateLength)
 }
+
+func Ptr[T any](v T) *T {
+	return &v
+}
