@@ -45,16 +45,17 @@ Functional tests for status-go
 
 #### Running with a custom Waku fleet
 
-By default, `status-backend` will use a hard-coded list of supported fleets, and select `status.prod` by default. Functional tests provide 2 options to ask status-go to use a different Waku fleet.
+`status-backend` can use a hard-coded list of supported Waku fleets or fleets specified in a config file. Functional tests provide 2 options to specify which Waku fleet to use.
 
-- Use `--waku-fleets-config` to override the list of supported fleets. \
-    The value will be passed to `InitializeApplication.wakuFleetsConfigFilePath` parameter. 
+- Use `--waku-fleets-config` to override the hard-coded list of supported fleets. \
+    The value will be passed to `InitializeApplication.wakuFleetsConfigFilePath` parameter. By default, it's set to JSON config for a local waku fleet. To run with a fleet from the hard-coded list use `--waku-fleets-config=""` and corresponding `--waku-fleet` value, e.g. `--waku-fleet=status.prod`
 - Use `--waku-fleet` to select a Waku fleet to be used by `status-go`. \
+    Default is `status-go.test` that will use local waku nodes for functional tests run. 
     The value will be passed to all of these parameters:
     - `CreateAccount.wakuV2Fleet`
     - `RestoreAccount.wakuV2Fleet`
 
-Please refer to the description of these parameters in `stauts-go` for details.
+Please refer to the description of these parameters in `status-go` for details.
 
 ### Prerequisites for Mac OSx users
 If you see errors at attempt to run tests, try to run in terminal:

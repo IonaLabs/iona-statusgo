@@ -190,8 +190,8 @@ class StatusBackend(RpcClient, SignalClient):
             "logEnabled": True,
             "logLevel": "DEBUG",
             "apiLogging": True,
-            "wakuFleetsConfigFilePath": option.waku_fleets_config,
         }
+        data["wakuFleetsConfigFilePath"] = option.waku_fleets_config
         return self.api_valid_request(method, data)
 
     def _set_networks(self, data, **kwargs):
