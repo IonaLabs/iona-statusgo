@@ -3321,7 +3321,8 @@ func (m *Messenger) handleRetrievedMessages(chatWithMessages map[messaging.ChatF
 
 	controlledCommunitiesChatIDs, err := m.communitiesManager.GetOwnedCommunitiesChatIDs()
 	if err != nil {
-		logger.Info("failed to retrieve admin communities", zap.Error(err))
+		logger.Error("failed to retrieve admin communities", zap.Error(err))
+		return nil, err
 	}
 
 	// fetch universal chatIDs as well.
