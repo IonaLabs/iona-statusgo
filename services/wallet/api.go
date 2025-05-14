@@ -32,6 +32,7 @@ import (
 	wcommon "github.com/status-im/status-go/services/wallet/common"
 	"github.com/status-im/status-go/services/wallet/currency"
 	"github.com/status-im/status-go/services/wallet/history"
+	"github.com/status-im/status-go/services/wallet/leaderboard"
 	"github.com/status-im/status-go/services/wallet/onramp"
 	"github.com/status-im/status-go/services/wallet/requests"
 	"github.com/status-im/status-go/services/wallet/router"
@@ -933,4 +934,24 @@ func (api *API) RestartWalletReloadTimer(ctx context.Context) error {
 func (api *API) IsChecksumValidForAddress(address string) (bool, error) {
 	logutils.ZapLogger().Debug("wallet.api.isChecksumValidForAddress", zap.String("address", address))
 	return abi_spec.CheckAddressChecksum(address)
+}
+
+// GetLeaderboardData returns cryptocurrency data with updated price information
+func (api *API) GetLeaderboardData(ctx context.Context) ([]leaderboard.Cryptocurrency, error) {
+	logutils.ZapLogger().Debug("call to GetLeaderboardData")
+	if api.s.leaderboardService == nil {
+		return nil, errors.New("leaderboard service not initialized")
+	}
+	return api.s.leaderboardService.GetCombinedData(), nil
+}
+
+func (api *API) FetchMarketTokenPageAsync(ctx context.Context, page, pageSize, sortOrder int, currency string) error {
+	logutils.ZapLogger().Debug("call to GetMarketTokenPageAsync", zap.Int("page", page), zap.Int("pageSize", pageSize), zap.Int("sortOrder", sortOrder), zap.String("currency", currency))
+	api.s.leaderboardService.FetchLeaderboardPageAsync(page, pageSize, sortOrder, currency)
+	return nil
+}
+
+func (api *API) UnsubscribeFromLeaderboard() error {
+	logutils.ZapLogger().Debug("call to UnsubscribeFromLeaderboard")
+	return api.s.leaderboardService.UnsubscribeFromLeaderboard()
 }

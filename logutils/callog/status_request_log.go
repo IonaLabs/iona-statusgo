@@ -38,6 +38,8 @@ var sensitiveKeys = []string{
 	"alchemyBaseSepoliaToken",
 	"statusProxyMarketUser",
 	"statusProxyMarketPassword",
+	"marketDataProxyUser",
+	"marketDataProxyPassword",
 	"statusProxyBlockchainUser",
 	"statusProxyBlockchainPassword",
 	"verifyENSURL",
