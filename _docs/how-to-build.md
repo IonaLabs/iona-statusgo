@@ -47,6 +47,24 @@ make install-gomobile
 make statusgo-cross # statusgo-android or statusgo-ios to build for specific platform
 ```
 
+## Build status-go with nix
+
+The `flake.nix` file exposes multiple `status-go` packages that can be built using Nix. To view the available packages for different architectures, run:
+```bash
+nix flake show
+```
+To build a specific package, use:
+```bash
+nix build '#name-of-the-package'
+```
+For example:
+```bash
+nix build '#status-go-library'
+```
+This flake includes a dependency on `nwaku`, which is pinned to a specific commit to ensure reproducibility and control over its version.
+Maintainers are responsible for tracking updates to `nwaku` and updating the pinned commit accordingly when new versions are released.
+Continuous Integration (CI) will validate whether the `status-go` packages build successfully with Nix, and report the result on pull requests.
+
 ## Debugging
 
 ### IDE Debugging

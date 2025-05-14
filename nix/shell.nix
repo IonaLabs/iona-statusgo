@@ -1,5 +1,6 @@
-{ config ? {}
-, pkgs ? import ./pkgs.nix { inherit config; } }:
+{
+  pkgs,
+}:
 
 let
   inherit (pkgs) lib stdenv callPackage;
@@ -31,7 +32,7 @@ in mkShell {
    ] ++ lib.optionals (stdenv.isDarwin) [ xcodeWrapper ];
 
    shellHook = lib.optionalString (!isMacM1) ''
-     ANDROID_HOME=${pkgs.androidPkgs.androidsdk}/libexec/android-sdk
+     ANDROID_HOME=${pkgs.androidPkgs.androidsdk}/libexec/android-sdk/
      ANDROID_NDK=$ANDROID_HOME/ndk-bundle
      ANDROID_SDK_ROOT=$ANDROID_HOME
      ANDROID_NDK_HOME=$ANDROID_NDK

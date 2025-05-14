@@ -102,6 +102,7 @@ test-bob/
 
 # Nix
 /.nix-gcroots/
+result
 
 # functional tests
 __pycache__/
