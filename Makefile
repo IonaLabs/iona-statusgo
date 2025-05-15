@@ -91,21 +91,21 @@ $(shell $(1))
 endef
 
 # TODO: Define more specific shells.
-TARGET := default
 ifneq ($(detected_OS),Windows)
- SHELL := ./nix/scripts/shell.sh
+# No need for shell.sh script anymore, we use nix develop directly
 endif
-shell: export TARGET ?= default
+
 shell: ##@prepare Enter into a pre-configured shell
 ifndef IN_NIX_SHELL
-	@ENTER_NIX_SHELL
+	@echo "Entering nix development environment..."
+	@nix develop
 else
 	@echo -e "$(YELLOW)Nix shell is already active$(RESET)"
 endif
 
 nix-repl: SHELL := /bin/sh
 nix-repl: ##@nix Start an interactive Nix REPL
-	nix repl shell.nix
+	nix repl --file flake.nix
 
 nix-gc-protected: SHELL := /bin/sh
 nix-gc-protected:

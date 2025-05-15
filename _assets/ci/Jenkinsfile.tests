@@ -93,15 +93,15 @@ pipeline {
 
     stage('Generate') {
       steps { script {
-        nix.shell('make generate', pure: false)
+        nix.develop('make generate', pure: false)
       } }
     }
 
     stage('Vendor Check') {
       steps { script {
-        nix.shell('make vendor', pure: false)
+        nix.develop('make vendor', pure: false)
         /* fail build if vendoring hasn't been done */
-        nix.shell('git diff --exit-code --no-color --stat vendor/')
+        nix.develop('git diff --exit-code --no-color --stat vendor/')
       } }
     }
 
@@ -110,13 +110,13 @@ pipeline {
         expression { isPRJob() }
       }
       steps { script {
-        nix.shell('make migration-check', pure: false)
+        nix.develop('make migration-check', pure: false)
       } }
     }
 
     stage('Lint') {
       steps { script {
-        nix.shell('make lint', pure: true)
+        nix.develop('make lint', pure: false)
       } }
     }
 
@@ -157,7 +157,7 @@ pipeline {
                 variable: 'CODECOV_TOKEN'
               ),
             ]) {
-              nix.shell('make test-unit V=1', pure: false)
+              nix.develop('make test-unit V=1', pure: false)
             }
             archiveArtifacts('report_*.xml, test_*.log, test-coverage.html')
           }

@@ -22,7 +22,12 @@ cd status-go
 
 ### 3. Set up build environment
 
-status-go uses nix in the Makefile to provide every tools required.
+status-go uses nix in the Makefile to provide every tools required. It is advised but not required to use Nix shell prior to executing other make targets.
+You can enter the development shell by using either of two:
+```bash
+make shell
+nix develop
+```
 
 ### 4. Build the status-backend
 
