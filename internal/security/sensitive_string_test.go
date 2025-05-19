@@ -5,62 +5,102 @@ import (
 	"testing"
 
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestNewSensitiveString(t *testing.T) {
+// SensitiveStringSuite defines a testify suite for testing SensitiveString
+type SensitiveStringSuite struct {
+	suite.Suite
+}
+
+// SensitiveStringSuite is the test suite for all SensitiveString behaviors.
+func (s *SensitiveStringSuite) TestNewSensitiveString() {
 	secretValue := gofakeit.LetterN(10)
-	s := NewSensitiveString(secretValue)
-	require.Equal(t, secretValue, s.Reveal())
+	ss := NewSensitiveString(secretValue)
+	s.Require().Equal(secretValue, ss.Reveal())
 }
 
-func TestStringRedaction(t *testing.T) {
+func (s *SensitiveStringSuite) TestStringRedaction() {
 	secretValue := gofakeit.LetterN(10)
-	s := NewSensitiveString(secretValue)
-	require.Equal(t, RedactionPlaceholder, s.String())
+	ss := NewSensitiveString(secretValue)
+	s.Require().Equal(RedactionPlaceholder, ss.String())
 }
 
-func TestEmptyStringRedaction(t *testing.T) {
-	s := NewSensitiveString("")
-	require.Equal(t, "", s.String())
+func (s *SensitiveStringSuite) TestEmptyStringRedaction() {
+	ss := NewSensitiveString("")
+	s.Require().Equal("", ss.String())
 }
 
-func TestMarshalJSON(t *testing.T) {
+func (s *SensitiveStringSuite) TestMarshalJSON() {
 	secretValue := gofakeit.LetterN(10)
-	s := NewSensitiveString(secretValue)
-	data, err := json.Marshal(s)
-	require.NoError(t, err)
-	require.JSONEq(t, `"`+RedactionPlaceholder+`"`, string(data))
+	ss := NewSensitiveString(secretValue)
+
+	data, err := json.Marshal(ss)
+	s.Require().NoError(err)
+	s.Require().JSONEq(`"`+RedactionPlaceholder+`"`, string(data))
 }
 
-func TestMarshalJSONPointer(t *testing.T) {
+func (s *SensitiveStringSuite) TestMarshalJSONPointer() {
 	secretValue := gofakeit.LetterN(10)
-	s := NewSensitiveString(secretValue)
-	data, err := json.Marshal(&s)
-	require.NoError(t, err)
-	require.JSONEq(t, `"`+RedactionPlaceholder+`"`, string(data))
+	sVal := NewSensitiveString(secretValue)
+
+	data, err := json.Marshal(&sVal)
+	s.Require().NoError(err)
+	s.Require().JSONEq(`"`+RedactionPlaceholder+`"`, string(data))
 }
 
-func TestUnmarshalJSON(t *testing.T) {
+func (s *SensitiveStringSuite) TestUnmarshalJSON() {
 	secretValue := gofakeit.LetterN(10)
-	data := `"` + secretValue + `"`
-	var s SensitiveString
-	err := json.Unmarshal([]byte(data), &s)
-	require.NoError(t, err)
-	require.Equal(t, secretValue, s.Reveal())
+	payload := `"` + secretValue + `"`
+	var ss SensitiveString
+
+	s.Require().NoError(json.Unmarshal([]byte(payload), &ss))
+	s.Require().Equal(secretValue, ss.Reveal())
 }
 
-func TestUnamarshalJSONError(t *testing.T) {
+func (s *SensitiveStringSuite) TestUnmarshalJSONError() {
 	// Can't unmarshal a non-string value
-	var s SensitiveString
-	data := `{"key": "value"}`
-	err := json.Unmarshal([]byte(data), &s)
-	require.Error(t, err)
+	var ss SensitiveString
+	payload := `{"key":"value"}`
+	s.Require().Error(json.Unmarshal([]byte(payload), &ss))
 }
 
-func TestCopySensitiveString(t *testing.T) {
+func (s *SensitiveStringSuite) TestCopySensitiveString() {
 	secretValue := gofakeit.LetterN(10)
-	s := NewSensitiveString(secretValue)
-	sCopy := s
-	require.Equal(t, secretValue, sCopy.Reveal())
+	ss := NewSensitiveString(secretValue)
+	ssCopy := ss
+	s.Require().Equal(secretValue, ssCopy.Reveal())
+}
+
+func (s *SensitiveStringSuite) TestTrimRight() {
+	const secretValue = "¡¡¡Hello, Gophers!!!" // #nosec G101
+	s1 := NewSensitiveString(secretValue)
+
+	s.Require().Equal(
+		s1.TrimRight("!"),
+		NewSensitiveString("¡¡¡Hello, Gophers"),
+	)
+}
+
+func (s *SensitiveStringSuite) TestContains() {
+	const secretValue = "¡¡¡Hello, Gophers!!!" // #nosec G101
+	s1 := NewSensitiveString(secretValue)
+
+	s.Require().True(s1.Contains("Hello"))
+	s.Require().False(s1.Contains("World"))
+}
+
+func (s *SensitiveStringSuite) TestAppend() {
+	secretValue := gofakeit.LetterN(10)
+	s1 := NewSensitiveString(secretValue)
+	s2 := NewSensitiveString(secretValue)
+
+	s.Require().Equal(s1.Append(s2), NewSensitiveString(secretValue+secretValue))
+	s.Require().Equal(s1.Append(secretValue), NewSensitiveString(secretValue+secretValue))
+	s.Require().Equal(s1.Append(secretValue, secretValue), NewSensitiveString(secretValue+secretValue+secretValue))
+}
+
+// Entry point for the suite
+func TestSensitiveStringSuite(t *testing.T) {
+	suite.Run(t, new(SensitiveStringSuite))
 }

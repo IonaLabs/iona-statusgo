@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/status-im/status-go/internal/security"
 )
 
 func TestHTTPClient_GetRequests(t *testing.T) {
@@ -63,8 +65,8 @@ func TestHTTPClient_GetRequests(t *testing.T) {
 			url:        "/test-credentials",
 			statusCode: http.StatusOK,
 			credentials: &BasicCreds{
-				User:     "username",
-				Password: "password",
+				User:     security.NewSensitiveString("username"),
+				Password: security.NewSensitiveString("password"),
 			},
 			expectedHeaders: map[string]string{
 				"Content-Type": "application/json",
@@ -118,7 +120,7 @@ func TestHTTPClient_GetRequests(t *testing.T) {
 					require.Equal(t, value[0], r.URL.Query().Get(param))
 				}
 				if data.credentials != nil {
-					authToken := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", data.credentials.User, data.credentials.Password)))
+					authToken := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", data.credentials.User.Reveal(), data.credentials.Password.Reveal())))
 					require.Equal(t, fmt.Sprintf("Basic %s", authToken), r.Header.Get("Authorization"))
 				}
 
@@ -244,7 +246,7 @@ func TestFetchDataCompression(t *testing.T) {
 
 	ctx := context.Background()
 	client := NewHTTPClient()
-	creds := BasicCreds{User: "testuser", Password: "testpass"}
+	creds := BasicCreds{User: security.NewSensitiveString("testuser"), Password: security.NewSensitiveString("testpass")}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test server

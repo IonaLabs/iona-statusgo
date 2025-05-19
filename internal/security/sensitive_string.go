@@ -1,7 +1,10 @@
 package security
 
 import (
+	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"strings"
 )
 
 const RedactionPlaceholder = "***"
@@ -18,6 +21,11 @@ type SensitiveString struct {
 // NewSensitiveString creates a new SensitiveString
 func NewSensitiveString(value string) SensitiveString {
 	return SensitiveString{value: value}
+}
+
+func NewSensitiveStringPrintf(format string, args ...interface{}) SensitiveString {
+	str := fmt.Sprintf(format, args...)
+	return NewSensitiveString(str)
 }
 
 // String provides a redacted version of the sensitive string
@@ -55,4 +63,52 @@ func (s SensitiveString) Reveal() string {
 // Empty checks if the value is empty
 func (s SensitiveString) Empty() bool {
 	return s.value == ""
+}
+
+func (s SensitiveString) TrimRight(cutset any) SensitiveString {
+	return NewSensitiveString(strings.TrimRight(s.value, getValue(cutset)))
+}
+
+func (s SensitiveString) Contains(substr any) bool {
+	return strings.Contains(s.value, getValue(substr))
+}
+
+func (s SensitiveString) Append(others ...any) SensitiveString {
+	result := s.value
+	for _, other := range others {
+		result += getValue(other)
+	}
+	return NewSensitiveString(result)
+}
+
+// getValue extracts the string value from various types
+func getValue(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case SensitiveString:
+		return x.value
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", v))
+	}
+}
+
+// Value implements the driver.Valuer interface for SensitiveString
+func (s SensitiveString) Value() (driver.Value, error) {
+	return s.value, nil
+}
+
+// Scan implements the sql.Scanner interface for SensitiveString
+func (s *SensitiveString) Scan(value interface{}) error {
+	switch v := value.(type) {
+	case nil:
+		s.value = ""
+	case string:
+		s.value = v
+	case []byte:
+		s.value = string(v)
+	default:
+		return fmt.Errorf("cannot scan type %T into SensitiveString", value)
+	}
+	return nil
 }
