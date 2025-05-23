@@ -95,7 +95,7 @@ const communityAdvertiseIntervalSecond int64 = 24 * 60 * 60
 // messageCacheIntervalMs is how long we should keep processed messages in the cache, in ms
 var messageCacheIntervalMs uint64 = 1000 * 60 * 60 * 48
 
-// Messenger is a entity managing chats and messages.
+// Messenger is an entity managing chats and messages.
 // It acts as a bridge between the application and encryption
 // layers.
 // It needs to expose an interface to manage installations
@@ -284,11 +284,9 @@ func (interceptor EnvelopeEventsInterceptor) MailServerRequestExpired(hash types
 }
 
 func NewMessenger(
-	nodeName string,
 	identity *ecdsa.PrivateKey,
 	waku wakutypes.Waku,
 	installationID string,
-	version string,
 	opts ...Option,
 ) (*Messenger, error) {
 	var messenger *Messenger
@@ -414,8 +412,6 @@ func NewMessenger(
 
 	pushNotificationClient := pushnotificationclient.New(pushNotificationClientPersistence, pushNotificationClientConfig, sender, sqlitePersistence)
 
-	ensVerifier := ens.New(logger, messaging.API(), database, c.verifyENSURL, c.verifyENSContractAddress)
-
 	managerOptions := []communities.ManagerOption{
 		communities.WithAccountManager(c.accountsManager),
 	}
@@ -456,7 +452,7 @@ func NewMessenger(
 		database,
 		encryptionProtocol,
 		logger,
-		ensVerifier,
+		c.ensVerifier,
 		c.communityTokensService,
 		messaging.API(),
 		messaging.API(),
@@ -535,7 +531,7 @@ func NewMessenger(
 		communitiesKeyDistributor:  communitiesKeyDistributor,
 		archiveManager:             archiveManager,
 		accountsManager:            c.accountsManager,
-		ensVerifier:                ensVerifier,
+		ensVerifier:                c.ensVerifier,
 		featureFlags:               c.featureFlags,
 		systemMessagesTranslations: c.systemMessagesTranslations,
 		allChats:                   new(chatMap),
@@ -572,7 +568,7 @@ func NewMessenger(
 		browserDatabase: c.browserDatabase,
 		httpServer:      c.httpServer,
 		shutdownTasks: []func() error{
-			ensVerifier.Stop,
+			c.ensVerifier.Stop,
 			pushNotificationClient.Stop,
 			communitiesManager.Stop,
 			archiveManager.Stop,
@@ -740,11 +736,14 @@ func (m *Messenger) Start() (*MessengerResponse, error) {
 		}
 	}
 
-	ensSubscription := m.ensVerifier.Subscribe()
+	var ensSubscription chan []*ens.VerificationRecord
+	if m.ensVerifier != nil {
+		ensSubscription = m.ensVerifier.Subscribe()
 
-	// Subscrbe
-	if err := m.ensVerifier.Start(); err != nil {
-		return nil, err
+		// Subscribe
+		if err := m.ensVerifier.Start(); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := m.communitiesManager.Start(); err != nil {
@@ -1013,7 +1012,9 @@ func (m *Messenger) handleConnectionChange(online bool) {
 	}
 
 	// Update ENS verifier
-	m.ensVerifier.SetOnline(online)
+	if m.ensVerifier != nil {
+		m.ensVerifier.SetOnline(online)
+	}
 }
 
 func (m *Messenger) Online() bool {

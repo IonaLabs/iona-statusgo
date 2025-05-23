@@ -35,12 +35,12 @@ import (
 	"github.com/status-im/status-go/multiaccounts"
 	"github.com/status-im/status-go/multiaccounts/accounts"
 	"github.com/status-im/status-go/params"
-	"github.com/status-im/status-go/pkg/version"
 	"github.com/status-im/status-go/protocol"
 	"github.com/status-im/status-go/protocol/anonmetrics"
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/communities"
 	"github.com/status-im/status-go/protocol/communities/token"
+	"github.com/status-im/status-go/protocol/ens"
 	"github.com/status-im/status-go/protocol/protobuf"
 	"github.com/status-im/status-go/protocol/pushnotificationclient"
 	"github.com/status-im/status-go/protocol/pushnotificationserver"
@@ -136,17 +136,23 @@ func (s *Service) InitProtocol(nodeName string, identity *ecdsa.PrivateKey, appD
 	s.multiAccountsDB = multiAccountDb
 	s.account = acc
 
-	options, err := buildMessengerOptions(s.config, identity, appDb, walletDb, httpServer, s.rpcClient, s.multiAccountsDB, acc, envelopeEventsConfig, s.accountsDB, walletService, communityTokensService, wakuService, logger, &MessengerSignalsHandler{}, accountManager, accountsFeed)
+	ensVerifier := ens.New(
+		logger,
+		s.waku, // timesource
+		appDb,
+		s.config.ShhextConfig.VerifyENSURL,
+		s.config.ShhextConfig.VerifyENSContractAddress,
+	)
+
+	options, err := buildMessengerOptions(s.config, identity, appDb, walletDb, httpServer, s.rpcClient, s.multiAccountsDB, acc, envelopeEventsConfig, s.accountsDB, walletService, communityTokensService, wakuService, logger, &MessengerSignalsHandler{}, accountManager, accountsFeed, ensVerifier)
 	if err != nil {
 		return err
 	}
 
 	messenger, err := protocol.NewMessenger(
-		nodeName,
 		identity,
 		s.waku,
 		s.config.ShhextConfig.InstallationID,
-		version.Version(),
 		options...,
 	)
 	if err != nil {
@@ -363,6 +369,7 @@ func buildMessengerOptions(
 	messengerSignalsHandler protocol.MessengerSignalsHandler,
 	accountManager account.Manager,
 	accountsFeed *event.Feed,
+	ensVerifier *ens.Verifier,
 ) ([]protocol.Option, error) {
 	options := []protocol.Option{
 		protocol.WithCustomLogger(logger),
@@ -375,7 +382,7 @@ func buildMessengerOptions(
 		protocol.WithBrowserDatabase(browsers.NewDB(appDb)),
 		protocol.WithEnvelopeEventsConfig(envelopeEventsConfig),
 		protocol.WithSignalsHandler(messengerSignalsHandler),
-		protocol.WithENSVerificationConfig(config.ShhextConfig.VerifyENSURL, config.ShhextConfig.VerifyENSContractAddress),
+		protocol.WithENSVerifier(ensVerifier),
 		protocol.WithClusterConfig(config.ClusterConfig),
 		protocol.WithTorrentConfig(&config.TorrentConfig),
 		protocol.WithHTTPServer(httpServer),
