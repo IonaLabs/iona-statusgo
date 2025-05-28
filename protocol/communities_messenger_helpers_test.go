@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	gethcommon "github.com/ethereum/go-ethereum/common"
-	hexutil "github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/status-im/status-go/account"
 	"github.com/status-im/status-go/eth-node/crypto"
@@ -26,7 +26,6 @@ import (
 	"github.com/status-im/status-go/protocol/communities/token"
 	"github.com/status-im/status-go/protocol/protobuf"
 	"github.com/status-im/status-go/protocol/requests"
-	"github.com/status-im/status-go/services/personal"
 	"github.com/status-im/status-go/services/wallet/bigint"
 	walletCommon "github.com/status-im/status-go/services/wallet/common"
 	"github.com/status-im/status-go/services/wallet/thirdparty"
@@ -329,12 +328,10 @@ func newTestCommunitiesMessenger(s *suite.Suite, waku wakutypes.Waku, config tes
 		Balances: config.mockedBalances,
 	}
 
-	personalAPI := personal.NewMockedAPI()
-
 	options := []Option{
 		WithAccountManager(accountsManagerMock),
 		WithTokenManager(tokenManagerMock),
-		WithMessageSigner(personalAPI),
+		WithMessageSigner(NewSignerStub()),
 		WithCollectiblesManager(config.collectiblesManager),
 		WithCommunityTokensService(config.collectiblesService),
 		WithAppSettings(*config.appSettings, *config.nodeConfig),
