@@ -385,11 +385,11 @@ vendor: generate
 	modvendor -copy="**/*.c **/*.h" -v
 .PHONY: vendor
 
-update-fleet-config: ##@other Update fleets configuration from fleets.status.im
-	./_assets/scripts/update-fleet-config.sh
-	@echo "Updating static assets..."
-	@go generate ./static
-	@echo "Done"
+# update-fleet-config: ##@other Update fleets configuration from fleets.status.im
+#	./_assets/scripts/update-fleet-config.sh
+#	@echo "Updating static assets..."
+#	@go generate ./static
+#	@echo "Done"
 
 migration: DEFAULT_MIGRATION_PATH := appdatabase/migrations/sql
 migration:

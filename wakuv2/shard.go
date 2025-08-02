@@ -39,7 +39,7 @@ func (s *Shard) PubsubTopic() string {
 	return ""
 }
 
-const MainStatusShardCluster = 16
+const MainStatusShardCluster = 72
 const DefaultShardIndex = 32
 const NonProtectedShardIndex = 64
 

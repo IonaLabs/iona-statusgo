@@ -53,7 +53,7 @@ type URLDataResponse struct {
 	Shard     *wakuv2.Shard            `json:"shard,omitempty"`
 }
 
-const baseShareURL = "https://status.app"
+const baseShareURL = "https://app.ionalabs.ai"
 const userPath = "u#"
 const userWithDataPath = "u/"
 const communityPath = "c#"
